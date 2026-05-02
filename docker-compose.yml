@@ -1,0 +1,37 @@
+services:
+  python:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - BRIDGE_HOST=0.0.0.0
+      - BRIDGE_PORT=8765
+    networks:
+      - trade-net
+    restart: unless-stopped
+
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - PYTHON_BRIDGE_URL=http://python:8765
+      - PYTHON_WS_URL=ws://python:8765
+      - CONFIG_YAML_PATH=/config/config.yaml
+    volumes:
+      - ./config:/config:ro
+      - ./web/client/dist:/app/web/client/dist:ro
+    depends_on:
+      - python
+    networks:
+      - trade-net
+    restart: unless-stopped
+
+networks:
+  trade-net:

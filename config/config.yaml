@@ -1,0 +1,167 @@
+# =============================================================
+# Trading Bot Configuration
+# =============================================================
+
+trading:
+  mode: paper              # paper | live  (live requires *_LIVE_TRADING_ENABLED=true in .env)
+  dry_run: true            # extra safety flag; when true, no real orders are placed
+  default_quote_asset: USD
+  exchange: binance        # binance | hyperliquid — active exchange adapter
+
+# ----- Market Selection -----------------------------------------------
+markets:
+  # Active markets for paper/live trading.
+  # Research validated: SOL and AVAX only (DonchianBreakout + ADX gate).
+  # BTC, ETH, OP rejected (robustness score 0–1/5 on 3yr Binance WF-OOS).
+  # ARB borderline (2/5) — excluded until more data.
+  whitelist:
+    - SOL
+    - AVAX
+  # Minimum 24-hour notional volume (USD) to trade a market
+  min_volume_usd: 5_000_000
+  # Maximum allowed bid-ask spread as fraction of mid price
+  max_spread_fraction: 0.002
+  # Minimum number of candles required before strategy can trade
+  min_candle_history: 100
+  # Refresh market eligibility every N seconds
+  eligibility_refresh_seconds: 300
+
+# ----- Strategy Selection ---------------------------------------------
+strategy:
+  # active: momentum_breakout | mean_reversion | funding_filter_momentum | market_making
+  active:
+    - momentum_breakout
+  # Timeframe for primary signal candles
+  timeframe: 15m          # 1m | 5m | 15m | 1h | 4h | 1d
+  # Allow multiple concurrent strategies (they share risk budget)
+  multi_strategy: false
+
+# ----- Risk Management -----------------------------------------------
+risk:
+  # Maximum fraction of equity risked per trade
+  max_risk_per_trade: 0.01        # 1%
+  # Maximum total open position value as fraction of equity
+  max_total_exposure: 0.30        # 30%
+  # Maximum single-market position as fraction of equity
+  max_single_market_exposure: 0.10
+  # Maximum number of concurrent open positions
+  max_open_positions: 3
+  # Maximum daily loss before kill-switch triggers (fraction of starting day equity)
+  max_daily_loss: 0.05            # 5%
+  # Kill-switch drawdown from peak equity
+  kill_switch_drawdown: 0.15      # 15%
+  # ATR multiplier for stop loss
+  stop_loss_atr_mult: 2.0
+  # ATR multiplier for take profit
+  take_profit_atr_mult: 4.0
+  # Optional trailing stop (0 = disabled)
+  trailing_stop_atr_mult: 1.5
+  # Cooldown period (seconds) after N consecutive losses
+  cooldown_after_losses: 3
+  cooldown_duration_seconds: 3600
+  # Maximum leverage cap
+  max_leverage: 5
+  # Minimum trade size (USD notional)
+  min_order_size_usd: 10.0
+  # Reject signals older than N seconds
+  max_signal_age_seconds: 60
+
+# ----- Execution ------------------------------------------------------
+execution:
+  order_type: limit             # limit | market
+  limit_slippage_bps: 5         # extra bps above ask / below bid for limit orders
+  max_retries: 3
+  retry_delay_seconds: 1.0
+  order_timeout_seconds: 30
+  cancel_on_timeout: true
+
+# ----- Binance exchange adapter ---------------------------------------
+binance:
+  # Futures market type — USDT-M perpetuals (comparable to Hyperliquid perps)
+  market_type: futures_usdt_m
+  # Use testnet for any authenticated (order-placing) session.
+  # Historical and market data always come from mainnet (richer history).
+  use_testnet: true
+  # Testnet base URL: https://testnet.binancefuture.com
+  # Mainnet base URL: https://fapi.binance.com
+  # Live order placement requires BINANCE_LIVE_TRADING_ENABLED=true in .env
+  live_enabled_env_var: BINANCE_LIVE_TRADING_ENABLED
+
+# ----- Paper Trading -------------------------------------------------
+paper:
+  starting_balance: 10000.0
+  fee_rate: 0.0004              # 4 bps taker (Binance Futures VIP-0 / Hyperliquid typical)
+  slippage_bps: 5               # simulated slippage per fill
+  latency_ms: 50                # simulated order latency
+
+# ----- Backtesting ---------------------------------------------------
+backtesting:
+  fee_rate: 0.0004
+  slippage_bps: 5
+  latency_bars: 1               # fill assumed on next bar open
+  initial_capital: 10000.0
+  # Data split fractions (must sum to 1.0)
+  train_fraction: 0.60
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  walk_forward_windows: 5
+  # Minimum trades for a result to be statistically meaningful
+  min_trades_for_validity: 30
+
+# ----- Strategies: Momentum Breakout ---------------------------------
+momentum_breakout:
+  donchian_period: 20
+  volume_ma_period: 20
+  volume_spike_mult: 2.5        # raised — require genuine volume surge
+  atr_period: 14
+  atr_filter_mult: 1.0          # min ATR for entry (avoid flat markets)
+  trend_ema_fast: 9
+  trend_ema_slow: 21
+  trend_ema_confirm: true       # require fast > slow for long
+  adx_period: 14
+  adx_threshold: 15.0           # min ADX to confirm trending regime
+  breakout_confirm_bars: 2      # N consecutive closes beyond channel required
+
+# ----- Strategies: Mean Reversion ------------------------------------
+mean_reversion:
+  bb_period: 20
+  bb_std: 2.0
+  rsi_period: 14
+  rsi_oversold: 30
+  rsi_overbought: 70
+  # Disable when realized vol exceeds this fraction of price
+  max_vol_for_reversion: 0.03
+  # Disable when trend strength (ADX) exceeds this
+  max_adx_for_reversion: 25
+
+# ----- Strategies: Funding Filter Momentum ---------------------------
+funding_filter_momentum:
+  funding_threshold_pct: 0.01   # |funding| > 1% annualized to act as filter
+  momentum_ema_fast: 5
+  momentum_ema_slow: 20
+  rsi_period: 14
+  rsi_entry_long: 50
+  rsi_entry_short: 50
+
+# ----- Strategies: Market Making -------------------------------------
+market_making:
+  spread_bps: 10                # minimum quoted spread
+  max_inventory_usd: 500        # max one-side inventory
+  inventory_skew_factor: 0.5    # fraction of spread to skew per $100 inventory
+  vol_pause_atr_mult: 3.0       # pause quoting if mid moves > N * ATR
+  cancel_replace_interval_ms: 2000
+  thin_book_threshold_usd: 1000 # pause if best book depth < this
+
+# ----- Logging -------------------------------------------------------
+logging:
+  level: INFO                   # DEBUG | INFO | WARNING | ERROR
+  file: logs/trading_bot.log
+  rotate_mb: 50
+  backup_count: 5
+  structured: true
+
+# ----- Storage -------------------------------------------------------
+storage:
+  db_path: data/trading.db
+  csv_export_path: data/exports/
+  candle_cache_days: 90
