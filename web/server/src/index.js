@@ -19,6 +19,7 @@ app.use('/api/config',     require('./routes/config'));
 app.use('/api/control',    require('./routes/control'));
 app.use('/api/candles',    require('./routes/candles'));
 app.use('/api/backtest',   require('./routes/backtest'));
+app.use('/api/symbols',    require('./routes/symbols'));
 
 app.get('/health', (_, res) => res.json({ ok: true }));
 

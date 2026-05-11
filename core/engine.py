@@ -55,6 +55,7 @@ class TradingEngine:
         self.mode = mode
         self._running = False
         self._symbols: List[str] = []
+        self._symbols_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -83,6 +84,28 @@ class TradingEngine:
         bus.emit(EventType.SHUTDOWN, source="engine")
         logger.info("Engine stopped")
 
+    async def add_symbol(self, symbol: str) -> dict:
+        symbol = symbol.upper()
+        async with self._symbols_lock:
+            if symbol in self._symbols:
+                return {"added": False, "symbol": symbol, "reason": "already_active"}
+            self._symbols.append(symbol)
+        logger.info("Symbol added dynamically: %s", symbol)
+        return {"added": True, "symbol": symbol}
+
+    async def remove_symbol(self, symbol: str) -> dict:
+        symbol = symbol.upper()
+        async with self._symbols_lock:
+            if symbol not in self._symbols:
+                return {"removed": False, "symbol": symbol, "reason": "not_active"}
+            self._symbols.remove(symbol)
+        logger.info("Symbol removed dynamically: %s", symbol)
+        return {"removed": True, "symbol": symbol}
+
+    async def get_active_symbols(self) -> list:
+        async with self._symbols_lock:
+            return list(self._symbols)
+
     # ------------------------------------------------------------------
     # Core cycle
     # ------------------------------------------------------------------
@@ -92,7 +115,9 @@ class TradingEngine:
             logger.warning("Kill switch active — skipping cycle")
             return
 
-        for symbol in self._symbols:
+        async with self._symbols_lock:
+            symbols_snapshot = list(self._symbols)
+        for symbol in symbols_snapshot:
             await self._process_symbol(symbol, timeframe)
 
     async def _process_symbol(self, symbol: str, timeframe: str) -> None:

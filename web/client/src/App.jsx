@@ -10,6 +10,7 @@ import { Strategies } from './pages/Strategies';
 import { Settings } from './pages/Settings';
 import { ChartPage } from './pages/ChartPage';
 import { BacktestPage } from './pages/BacktestPage';
+import { TradingMarkets } from './pages/TradingMarkets';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/chart" element={<ChartPage />} />
             <Route path="/backtest" element={<BacktestPage />} />
+            <Route path="/markets" element={<TradingMarkets />} />
           </Routes>
         </main>
       </div>

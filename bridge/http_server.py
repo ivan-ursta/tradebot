@@ -335,6 +335,40 @@ async def handle_backtest_list(request: web.Request) -> web.Response:
     return web.json_response({"symbols": symbols})
 
 
+async def handle_get_symbols(request: web.Request) -> web.Response:
+    engine = request.app["engine"]
+    symbols = await engine.get_active_symbols()
+    return web.json_response({"symbols": symbols, "count": len(symbols)})
+
+
+async def handle_add_symbol(request: web.Request) -> web.Response:
+    engine = request.app["engine"]
+    try:
+        body = await request.json()
+        symbol = body.get("symbol", "").strip().upper()
+        if not symbol:
+            return web.json_response({"error": "symbol is required"}, status=400)
+        result = await engine.add_symbol(symbol)
+        return web.json_response(result)
+    except Exception as exc:
+        logger.exception("Error adding symbol")
+        return web.json_response({"error": str(exc)}, status=500)
+
+
+async def handle_remove_symbol(request: web.Request) -> web.Response:
+    engine = request.app["engine"]
+    try:
+        body = await request.json()
+        symbol = body.get("symbol", "").strip().upper()
+        if not symbol:
+            return web.json_response({"error": "symbol is required"}, status=400)
+        result = await engine.remove_symbol(symbol)
+        return web.json_response(result)
+    except Exception as exc:
+        logger.exception("Error removing symbol")
+        return web.json_response({"error": str(exc)}, status=500)
+
+
 def create_bridge_app(
     state,
     engine,
@@ -364,6 +398,9 @@ def create_bridge_app(
     app.router.add_get("/bridge/equity", handle_equity)
     app.router.add_post("/bridge/close/{symbol}", handle_close_position)
     app.router.add_get("/bridge/candles/{symbol}", handle_candles)
+    app.router.add_get("/bridge/symbols",          handle_get_symbols)
+    app.router.add_post("/bridge/symbols/add",     handle_add_symbol)
+    app.router.add_post("/bridge/symbols/remove",  handle_remove_symbol)
     app.router.add_post("/bridge/backtest/run", handle_backtest_run)
     app.router.add_get("/bridge/backtest/status/{job_id}", handle_backtest_status)
     app.router.add_get("/bridge/backtest/results/{symbol}", handle_backtest_results)

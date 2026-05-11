@@ -5,6 +5,11 @@ function createWsProxy(wss) {
   let upstream = null;
   let reconnectTimer = null;
 
+  function scheduleReconnect() {
+    if (reconnectTimer) return; // already scheduled
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);
+  }
+
   function connect() {
     if (upstream) {
       try { upstream.terminate(); } catch (_) {}
@@ -13,7 +18,6 @@ function createWsProxy(wss) {
 
     upstream.on('open', () => {
       console.log('[wsProxy] Connected to Python bridge');
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     });
 
     upstream.on('message', (data) => {
@@ -27,11 +31,11 @@ function createWsProxy(wss) {
 
     upstream.on('close', () => {
       console.log('[wsProxy] Python bridge disconnected — retrying in 3s');
-      reconnectTimer = setTimeout(connect, 3000);
+      scheduleReconnect();
     });
 
     upstream.on('error', () => {
-      reconnectTimer = setTimeout(connect, 3000);
+      // 'close' always fires after 'error', so let it handle the retry
     });
   }
 

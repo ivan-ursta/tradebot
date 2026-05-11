@@ -3,6 +3,7 @@ import { useEngineControl } from '../../hooks/useEngineControl';
 
 const links = [
   { to: '/', label: 'Overview' },
+  { to: '/markets', label: 'Markets' },
   { to: '/chart', label: 'Chart' },
   { to: '/positions', label: 'Positions' },
   { to: '/trades', label: 'Trade History' },

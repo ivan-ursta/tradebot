@@ -218,6 +218,8 @@ async def run_paper_trading(config: dict) -> None:
 async def run_backtest(config: dict, symbol: str = "BTC") -> None:
     """
     Run a full backtest + walk-forward analysis for all active strategies.
+    CPU-heavy bt.run() / wfa.run() calls are offloaded to a thread pool so
+    the asyncio event loop (and the bridge HTTP server) stays responsive.
     """
     load_dotenv()
     hl_client = HyperliquidClient()
@@ -267,8 +269,11 @@ async def run_backtest(config: dict, symbol: str = "BTC") -> None:
             print(msg)
             logger.info(msg)
 
-        # In-sample
-        train_result = bt.run(train_df, symbol)
+        loop = asyncio.get_event_loop()
+
+        # Run CPU-heavy synchronous backtests in a thread pool so the event
+        # loop (and the bridge HTTP server) stays responsive during the run.
+        train_result = await loop.run_in_executor(None, bt.run, train_df, symbol)
         is_summary = train_result.metrics.summary() if train_result.metrics else "N/A"
         _print(f"\n{'='*60}")
         _print(f"Strategy : {strategy.name}  |  Symbol : {symbol}  |  TF : {timeframe}")
@@ -276,12 +281,10 @@ async def run_backtest(config: dict, symbol: str = "BTC") -> None:
         _print(f"{'='*60}")
         _print(f"[IN-SAMPLE   {len(train_df):4d} bars]  {is_summary}")
 
-        # Validation
-        val_result = bt.run(val_df, symbol)
+        val_result = await loop.run_in_executor(None, bt.run, val_df, symbol)
         _print(f"[VALIDATION  {len(val_df):4d} bars]  {val_result.metrics.summary() if val_result.metrics else 'N/A'}")
 
-        # Out-of-sample
-        test_result = bt.run(test_df, symbol)
+        test_result = await loop.run_in_executor(None, bt.run, test_df, symbol)
         _print(f"[OUT-OF-SAMPLE {len(test_df):3d} bars]  {test_result.metrics.summary() if test_result.metrics else 'N/A'}")
 
         # Overfitting check
@@ -308,7 +311,7 @@ async def run_backtest(config: dict, symbol: str = "BTC") -> None:
             n_windows=bt_cfg.get("walk_forward_windows", 5),
             initial_capital=initial_capital,
         )
-        wf_result = wfa.run(df, symbol)
+        wf_result = await loop.run_in_executor(None, wfa.run, df, symbol)
         _print(wf_result.summary())
 
         # Export
