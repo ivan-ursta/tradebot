@@ -152,6 +152,16 @@ async def run_paper_trading(config: dict) -> None:
     db_path = config.get("storage", {}).get("db_path", "data/trading.db")
     store = SQLiteStore(db_path)
 
+    # Seed daily stats from DB so restarts don't reset the counters
+    today_stats = store.get_today_stats()
+    state.daily.trade_count = today_stats["trade_count"]
+    state.daily.win_count = today_stats["win_count"]
+    state.daily.realized_pnl = today_stats["realized_pnl"]
+    logger.info(
+        "Daily stats seeded from DB: trades=%d wins=%d pnl=%.2f",
+        today_stats["trade_count"], today_stats["win_count"], today_stats["realized_pnl"],
+    )
+
     # Wire storage to events
     from core.events import EventType, bus
     from core.models import Fill, Signal

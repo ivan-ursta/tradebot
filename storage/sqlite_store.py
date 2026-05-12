@@ -173,6 +173,19 @@ class SQLiteStore:
                 q = q.where(trades_table.c.strategy == strategy)
             return conn.execute(q).fetchall()
 
+    def get_today_stats(self) -> dict:
+        """Return trade_count, win_count, realized_pnl for today (UTC date)."""
+        today = datetime.utcnow().date().isoformat()
+        with self._engine.connect() as conn:
+            q = select(trades_table).where(
+                text("date(exit_time) = :d")
+            ).params(d=today)
+            rows = conn.execute(q).fetchall()
+        trade_count = len(rows)
+        win_count = sum(1 for r in rows if (r._mapping if hasattr(r, "_mapping") else r)["net_pnl"] > 0)
+        realized_pnl = sum((r._mapping if hasattr(r, "_mapping") else r)["net_pnl"] for r in rows)
+        return {"trade_count": trade_count, "win_count": win_count, "realized_pnl": realized_pnl}
+
     # ------------------------------------------------------------------
     # Signals
     # ------------------------------------------------------------------
