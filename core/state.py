@@ -121,7 +121,10 @@ class TradingState:
     def total_exposure_fraction(self) -> float:
         if self.equity <= 0:
             return 0.0
-        return self.total_exposure_usd / self.equity
+        leverage = 1.0
+        if hasattr(self, "config_ref"):
+            leverage = float(self.config_ref.get("risk", {}).get("max_leverage", 1.0))
+        return (self.total_exposure_usd / max(leverage, 1.0)) / self.equity
 
     # ------------------------------------------------------------------
     # Mutations

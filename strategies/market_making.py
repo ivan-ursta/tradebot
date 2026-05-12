@@ -91,10 +91,8 @@ class MarketMaking(BaseStrategy):
 
         # Volatility pause: if price moved too much since last mid → pause
         if self._last_mid and abs(close - self._last_mid) > self.vol_pause_mult * atr_val:
-            import datetime as dt
-            self._pause_until = datetime.now(timezone.utc).replace(
-                second=datetime.now(timezone.utc).second + 30
-            )
+            from datetime import timedelta
+            self._pause_until = datetime.now(timezone.utc) + timedelta(seconds=30)
             self._logger.warning("MM volatility pause triggered at %.4f", close)
             return self._flat_signal(symbol)
 

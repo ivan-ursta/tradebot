@@ -140,7 +140,17 @@ def _serialize_payload(event_type: EventType, payload: Any) -> Any:
         if hasattr(payload, "order_id"):
             return serialize_fill(payload)
     if isinstance(payload, dict):
-        return {k: _safe_float(v) if isinstance(v, float) else v for k, v in payload.items()}
+        result = {}
+        for k, v in payload.items():
+            if hasattr(v, "strategy_name"):  # Signal object
+                result[k] = serialize_signal(v)
+            elif hasattr(v, "symbol") and hasattr(v, "side"):  # Position object
+                result[k] = serialize_position(v)
+            elif isinstance(v, float):
+                result[k] = _safe_float(v)
+            else:
+                result[k] = v
+        return result
     if isinstance(payload, str):
         return payload
     return str(payload)
