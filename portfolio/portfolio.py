@@ -22,9 +22,10 @@ class Portfolio:
     Suitable for both paper and live sessions.
     """
 
-    def __init__(self, starting_balance: float = 10_000.0) -> None:
+    def __init__(self, starting_balance: float = 10_000.0, max_leverage: float = 1.0) -> None:
         self.cash: float = starting_balance
         self.starting_balance: float = starting_balance
+        self.max_leverage: float = max(max_leverage, 1.0)
         self.positions: Dict[str, Position] = {}
         self.realized_pnl: float = 0.0
         self.total_fees_paid: float = 0.0
@@ -51,11 +52,12 @@ class Portfolio:
     def _apply_long_fill(
         self, symbol: str, fill: Fill, existing: Optional[Position]
     ) -> None:
-        cost = fill.quantity * fill.price
-        self.cash -= cost
+        # Futures margin accounting: deduct initial margin on open, return margin + PnL on close
+        margin = fill.quantity * fill.price / self.max_leverage
 
         if existing is None or existing.side == Side.LONG:
-            # Open or add to long
+            # Opening / adding to long — deduct initial margin
+            self.cash -= margin
             if existing is None:
                 self.positions[symbol] = Position(
                     symbol=symbol,
@@ -71,10 +73,11 @@ class Portfolio:
                 ) / total_qty
                 existing.quantity = total_qty
         else:
-            # Closing short
+            # Closing short — return margin and add PnL
+            entry_margin = fill.quantity * existing.avg_entry_price / self.max_leverage
             pnl = (existing.avg_entry_price - fill.price) * fill.quantity
             self.realized_pnl += pnl
-            self.cash += existing.avg_entry_price * fill.quantity + pnl  # return margin + pnl
+            self.cash += entry_margin + pnl
             remaining = existing.quantity - fill.quantity
             if remaining <= 1e-8:
                 del self.positions[symbol]
@@ -86,10 +89,11 @@ class Portfolio:
     def _apply_short_fill(
         self, symbol: str, fill: Fill, existing: Optional[Position]
     ) -> None:
+        margin = fill.quantity * fill.price / self.max_leverage
+
         if existing is None or existing.side == Side.SHORT:
-            # Open or add to short (we receive proceeds from shorting)
-            proceeds = fill.quantity * fill.price
-            self.cash += proceeds
+            # Opening / adding to short — deduct initial margin
+            self.cash -= margin
             if existing is None:
                 self.positions[symbol] = Position(
                     symbol=symbol,
@@ -105,11 +109,11 @@ class Portfolio:
                 ) / total_qty
                 existing.quantity = total_qty
         else:
-            # Closing long
-            proceeds = fill.quantity * fill.price
-            self.cash += proceeds
+            # Closing long — return margin and add PnL
+            entry_margin = fill.quantity * existing.avg_entry_price / self.max_leverage
             pnl = (fill.price - existing.avg_entry_price) * fill.quantity
             self.realized_pnl += pnl
+            self.cash += entry_margin + pnl
             remaining = existing.quantity - fill.quantity
             if remaining <= 1e-8:
                 del self.positions[symbol]
@@ -123,13 +127,15 @@ class Portfolio:
     # ------------------------------------------------------------------
 
     def mark_to_market(self, prices: Dict[str, float]) -> float:
-        """Compute total equity = cash + unrealized PnL of all positions."""
+        """Total equity = free cash + locked margin + unrealized PnL."""
         unrealized = 0.0
+        locked_margin = 0.0
         for symbol, pos in self.positions.items():
             price = prices.get(symbol)
+            locked_margin += pos.quantity * pos.avg_entry_price / self.max_leverage
             if price:
                 unrealized += pos.mark_to_market(price)
-        return self.cash + unrealized
+        return self.cash + locked_margin + unrealized
 
     # ------------------------------------------------------------------
     # Queries

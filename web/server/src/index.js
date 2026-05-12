@@ -14,6 +14,7 @@ app.use('/api/status',     require('./routes/status'));
 app.use('/api/positions',  require('./routes/positions'));
 app.use('/api/strategies', require('./routes/strategies'));
 app.use('/api/trades',     require('./routes/trades'));
+app.use('/api/signals',    require('./routes/signals'));
 app.use('/api/equity',     require('./routes/equity'));
 app.use('/api/config',     require('./routes/config'));
 app.use('/api/control',    require('./routes/control'));

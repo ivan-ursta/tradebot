@@ -182,6 +182,27 @@ async def handle_equity(request: web.Request) -> web.Response:
         return web.json_response({"points": []})
 
 
+async def handle_signals(request: web.Request) -> web.Response:
+    store = request.app.get("store")
+    if store is None:
+        return web.json_response({"signals": []})
+    limit = min(int(request.rel_url.query.get("limit", "200")), 500)
+    symbol = request.rel_url.query.get("symbol")
+    try:
+        rows = store.get_signals(limit=limit, symbol=symbol)
+        signals = []
+        for r in rows:
+            row_dict = dict(r._mapping) if hasattr(r, "_mapping") else dict(r)
+            for k, v in row_dict.items():
+                if hasattr(v, "isoformat"):
+                    row_dict[k] = v.isoformat() + "Z"
+            signals.append(row_dict)
+        return web.json_response({"signals": signals})
+    except Exception as exc:
+        logger.error("handle_signals error: %s", exc)
+        return web.json_response({"signals": []})
+
+
 async def handle_snapshot(request: web.Request) -> web.Response:
     state = request.app["state"]
     return web.json_response(serialize_state(state))
@@ -390,6 +411,7 @@ def create_bridge_app(
     app["config"] = config or {}
 
     app.router.add_get("/bridge/status", handle_status)
+    app.router.add_get("/bridge/signals", handle_signals)
     app.router.add_get("/bridge/positions", handle_positions)
     app.router.add_get("/bridge/strategies", handle_strategies)
     app.router.add_get("/bridge/pnl", handle_pnl)

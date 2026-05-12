@@ -8,8 +8,8 @@ import {
 } from 'lightweight-charts';
 import { useLiveEvents } from '../hooks/useLiveEvents';
 
-const TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d'];
-const CANDLE_LIMITS = { '5m': 500, '15m': 500, '1h': 500, '4h': 300, '1d': 200 };
+const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
+const CANDLE_LIMITS = { '1m': 500, '5m': 500, '15m': 500, '1h': 500, '4h': 300, '1d': 200 };
 
 // Convert ISO trade timestamp to Unix seconds snapped to candle boundary
 function snapToCandle(isoTime, tfSeconds) {

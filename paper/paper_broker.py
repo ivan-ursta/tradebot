@@ -40,11 +40,13 @@ class PaperBroker:
         fee_schedule: FeeSchedule = HYPERLIQUID_DEFAULT,
         slippage_bps: float = 5,
         latency_ms: float = 50,
+        max_leverage: float = 1.0,
     ) -> None:
-        self.portfolio = Portfolio(starting_balance)
+        self.portfolio = Portfolio(starting_balance, max_leverage=max_leverage)
         self.fee_schedule = fee_schedule
         self.slippage_bps = slippage_bps
         self.latency_ms = latency_ms
+        self.max_leverage = max_leverage
         self.pnl_tracker = PnLTracker()
         self._entry_records: Dict[str, dict] = {}  # symbol → entry info
 
@@ -78,15 +80,14 @@ class PaperBroker:
 
         fee = self.fee_schedule.compute_fee(fill_price * order.quantity, is_taker=True)
 
-        # Check sufficient balance for buys
-        if is_buy:
-            required = fill_price * order.quantity + fee
-            if required > self.portfolio.cash:
-                logger.warning(
-                    "Insufficient paper balance: need %.2f, have %.2f",
-                    required, self.portfolio.cash,
-                )
-                return None
+        # Check sufficient margin — futures paper trading uses initial margin, not full notional
+        margin_required = (fill_price * order.quantity / self.max_leverage) + fee
+        if margin_required > self.portfolio.cash:
+            logger.warning(
+                "Insufficient paper margin: need %.2f (notional=%.2f lev=%.1fx), have %.2f",
+                margin_required, fill_price * order.quantity, self.max_leverage, self.portfolio.cash,
+            )
+            return None
 
         fill = Fill(
             id=str(uuid.uuid4()),

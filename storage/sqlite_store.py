@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     Table,
     Boolean,
+    Text,
     create_engine,
     insert,
     select,
@@ -90,6 +91,21 @@ equity_table = Table(
     Column("mode", String),
 )
 
+signals_table = Table(
+    "signals",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("timestamp", DateTime),
+    Column("symbol", String),
+    Column("strategy_name", String),
+    Column("direction", String),
+    Column("entry_price", Float),
+    Column("stop_loss", Float),
+    Column("take_profit", Float),
+    Column("confidence", Float),
+    Column("regime", String),
+)
+
 
 class SQLiteStore:
     """
@@ -128,22 +144,25 @@ class SQLiteStore:
     # ------------------------------------------------------------------
 
     def save_trade(self, trade: TradePnL) -> None:
-        with self._engine.begin() as conn:
-            conn.execute(
-                insert(trades_table).values(
-                    symbol=trade.symbol,
-                    strategy=trade.strategy,
-                    side=trade.side,
-                    entry_price=trade.entry_price,
-                    exit_price=trade.exit_price,
-                    quantity=trade.quantity,
-                    gross_pnl=trade.gross_pnl,
-                    fees=trade.fees,
-                    net_pnl=trade.net_pnl,
-                    entry_time=trade.entry_time,
-                    exit_time=trade.exit_time,
+        try:
+            with self._engine.begin() as conn:
+                conn.execute(
+                    insert(trades_table).values(
+                        symbol=trade.symbol,
+                        strategy=trade.strategy,
+                        side=trade.side,
+                        entry_price=trade.entry_price,
+                        exit_price=trade.exit_price,
+                        quantity=trade.quantity,
+                        gross_pnl=trade.gross_pnl,
+                        fees=trade.fees,
+                        net_pnl=trade.net_pnl,
+                        entry_time=trade.entry_time,
+                        exit_time=trade.exit_time,
+                    )
                 )
-            )
+        except Exception:
+            logger.exception("Failed to save trade %s/%s", trade.symbol, trade.strategy)
 
     def get_trades(self, symbol: Optional[str] = None, strategy: Optional[str] = None) -> list:
         with self._engine.connect() as conn:
@@ -152,6 +171,38 @@ class SQLiteStore:
                 q = q.where(trades_table.c.symbol == symbol)
             if strategy:
                 q = q.where(trades_table.c.strategy == strategy)
+            return conn.execute(q).fetchall()
+
+    # ------------------------------------------------------------------
+    # Signals
+    # ------------------------------------------------------------------
+
+    def save_signal(self, signal) -> None:
+        try:
+            with self._engine.begin() as conn:
+                conn.execute(
+                    insert(signals_table).prefix_with("OR IGNORE").values(
+                        id=signal.id,
+                        timestamp=signal.timestamp,
+                        symbol=signal.symbol,
+                        strategy_name=signal.strategy_name,
+                        direction=signal.direction.value if hasattr(signal.direction, "value") else str(signal.direction),
+                        entry_price=signal.entry_price,
+                        stop_loss=signal.stop_loss,
+                        take_profit=signal.take_profit,
+                        confidence=signal.confidence,
+                        regime=signal.regime.value if hasattr(signal.regime, "value") else str(signal.regime),
+                    )
+                )
+        except Exception:
+            logger.exception("Failed to save signal %s/%s", signal.symbol, signal.strategy_name)
+
+    def get_signals(self, limit: int = 200, symbol: Optional[str] = None) -> list:
+        with self._engine.connect() as conn:
+            q = select(signals_table).order_by(signals_table.c.timestamp.desc())
+            if symbol:
+                q = q.where(signals_table.c.symbol == symbol)
+            q = q.limit(limit)
             return conn.execute(q).fetchall()
 
     # ------------------------------------------------------------------

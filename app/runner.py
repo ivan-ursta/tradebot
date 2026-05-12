@@ -119,11 +119,13 @@ async def run_paper_trading(config: dict) -> None:
     state.config_ref = config  # allow strategies to access config
 
     # Paper broker
+    max_leverage = float(config.get("risk", {}).get("max_leverage", 5.0))
     fee_schedule = FeeSchedule(taker_rate=paper_cfg.get("fee_rate", 0.0004))
     paper_broker = PaperBroker(
         starting_balance=starting_balance,
         fee_schedule=fee_schedule,
         slippage_bps=paper_cfg.get("slippage_bps", 5),
+        max_leverage=max_leverage,
     )
     paper_exchange = PaperExchange(paper_broker)
 
@@ -149,6 +151,30 @@ async def run_paper_trading(config: dict) -> None:
     # Storage
     db_path = config.get("storage", {}).get("db_path", "data/trading.db")
     store = SQLiteStore(db_path)
+
+    # Wire storage to events
+    from core.events import EventType, bus
+    from core.models import Fill, Signal
+
+    def _on_fill(event):
+        fill = event.payload
+        if isinstance(fill, Fill):
+            store.save_fill(fill)
+
+    def _on_signal(event):
+        signal = event.payload
+        if isinstance(signal, Signal):
+            store.save_signal(signal)
+
+    def _on_position_closed(event):
+        # pnl_tracker.record_trade() is called inside paper_broker.fill_order()
+        # before POSITION_CLOSED fires, so trades[-1] is the trade that just closed.
+        if paper_broker.pnl_tracker.trades:
+            store.save_trade(paper_broker.pnl_tracker.trades[-1])
+
+    bus.subscribe(EventType.ORDER_FILLED, _on_fill)
+    bus.subscribe(EventType.SIGNAL_GENERATED, _on_signal)
+    bus.subscribe(EventType.POSITION_CLOSED, _on_position_closed)
 
     # Engine
     engine = TradingEngine(
@@ -194,11 +220,29 @@ async def run_paper_trading(config: dict) -> None:
     logger.info("Bridge server started on http://%s:%d", bridge_host, bridge_port)
     # --- End bridge setup ---
 
+    async def _equity_snapshot_loop():
+        from datetime import datetime, timezone
+        while True:
+            await asyncio.sleep(60)
+            try:
+                mids = await market_data.get_all_mids()
+                equity = paper_broker.get_equity(mids)
+                store.save_equity_snapshot(
+                    timestamp=datetime.now(timezone.utc),
+                    equity=equity,
+                    cash=paper_broker.get_balance(),
+                    realized_pnl=paper_broker.pnl_tracker.total_pnl,
+                    mode="paper",
+                )
+            except Exception as exc:
+                logger.debug("Equity snapshot error: %s", exc)
+
     try:
         await asyncio.gather(
             engine.start(eligible_symbols),
             broadcaster.broadcast_events_loop(),
             broadcaster.broadcast_snapshot_loop(),
+            _equity_snapshot_loop(),
         )
     except KeyboardInterrupt:
         logger.info("Shutting down paper trading session...")
