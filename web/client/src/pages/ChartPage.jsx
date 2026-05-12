@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   HistogramSeries,
   LineStyle,
@@ -121,6 +122,7 @@ export function ChartPage() {
   const candleSeriesRef = useRef(null);
   const volSeriesRef = useRef(null);
   const priceLineRef = useRef(null);
+  const markersRef = useRef(null);
 
   // Load whitelist from config (for badge highlighting only)
   useEffect(() => {
@@ -206,6 +208,7 @@ export function ChartPage() {
       chartRef.current = null;
       candleSeriesRef.current = null;
       volSeriesRef.current = null;
+      markersRef.current = null;
     };
   }, []);
 
@@ -224,12 +227,16 @@ export function ChartPage() {
     chartRef.current?.timeScale().fitContent();
   }, [candles]);
 
-  // Update trade markers
+  // Update trade markers (v5 API: createSeriesMarkers)
   useEffect(() => {
-    if (!candleSeriesRef.current || !trades.length) return;
+    if (!candleSeriesRef.current) return;
     const symbolTrades = trades.filter(t => t.symbol === symbol);
     const markers = buildMarkers(symbolTrades, timeframe);
-    candleSeriesRef.current.setMarkers(markers);
+    if (markersRef.current) {
+      markersRef.current.setMarkers(markers);
+    } else {
+      markersRef.current = createSeriesMarkers(candleSeriesRef.current, markers);
+    }
   }, [trades, symbol, timeframe]);
 
   // Update open-position price line
