@@ -66,8 +66,9 @@ class PositionSizer:
         # Raw quantity: risk_dollars / stop_distance
         raw_qty = risk_dollars / stop_distance
 
-        # Cap by leverage constraint
-        max_notional = equity * self.max_leverage
+        # Cap by leverage constraint — leave 1% headroom so fees don't push
+        # the required margin over the available balance
+        max_notional = equity * self.max_leverage * 0.99
         max_qty_by_leverage = max_notional / signal.entry_price
         raw_qty = min(raw_qty, max_qty_by_leverage)
 
