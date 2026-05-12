@@ -80,14 +80,15 @@ class PaperBroker:
 
         fee = self.fee_schedule.compute_fee(fill_price * order.quantity, is_taker=True)
 
-        # Check sufficient margin — futures paper trading uses initial margin, not full notional
-        margin_required = (fill_price * order.quantity / self.max_leverage) + fee
-        if margin_required > self.portfolio.cash:
-            logger.warning(
-                "Insufficient paper margin: need %.2f (notional=%.2f lev=%.1fx), have %.2f",
-                margin_required, fill_price * order.quantity, self.max_leverage, self.portfolio.cash,
-            )
-            return None
+        # Margin check only for new position opens — closing orders release margin, not consume it
+        if not order.reduce_only:
+            margin_required = (fill_price * order.quantity / self.max_leverage) + fee
+            if margin_required > self.portfolio.cash:
+                logger.warning(
+                    "Insufficient paper margin: need %.2f (notional=%.2f lev=%.1fx), have %.2f",
+                    margin_required, fill_price * order.quantity, self.max_leverage, self.portfolio.cash,
+                )
+                return None
 
         fill = Fill(
             id=str(uuid.uuid4()),

@@ -170,7 +170,9 @@ async def run_paper_trading(config: dict) -> None:
         # pnl_tracker.record_trade() is called inside paper_broker.fill_order()
         # before POSITION_CLOSED fires, so trades[-1] is the trade that just closed.
         if paper_broker.pnl_tracker.trades:
-            store.save_trade(paper_broker.pnl_tracker.trades[-1])
+            trade = paper_broker.pnl_tracker.trades[-1]
+            store.save_trade(trade)
+            risk_manager.on_trade_result(trade.strategy, trade.net_pnl, state)
 
     bus.subscribe(EventType.ORDER_FILLED, _on_fill)
     bus.subscribe(EventType.SIGNAL_GENERATED, _on_signal)

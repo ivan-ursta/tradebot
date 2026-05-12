@@ -141,11 +141,9 @@ class TradingState:
 
     def add_fill(self, fill: Fill) -> None:
         self.recent_fills.append(fill)
-        self.daily.trade_count += 1
-        if fill.side == Side.LONG:
-            pass  # wins tracked on close
 
     def record_trade_result(self, pnl: float, strategy_name: str) -> None:
+        self.daily.trade_count += 1
         self.daily.realized_pnl += pnl
         if pnl > 0:
             self.daily.win_count += 1
