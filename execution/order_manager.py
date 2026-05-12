@@ -103,9 +103,14 @@ class OrderManager:
     # Close position
     # ------------------------------------------------------------------
 
-    async def close_position(self, position: Position, reason: str = "") -> Optional[Order]:
+    async def close_position(
+        self, position: Position, reason: str = "", price: Optional[float] = None
+    ) -> Optional[Order]:
         """Close an open position with a market order."""
-        logger.info("Closing position [%s] reason=%s", position.symbol, reason)
+        logger.info("Closing position [%s] reason=%s price=%s", position.symbol, reason, price)
+
+        # Fall back to avg entry price so paper fills never get a None price
+        fill_price = price or position.avg_entry_price
 
         close_side = Side.SHORT if position.side == Side.LONG else Side.LONG
         order = Order(
@@ -114,6 +119,7 @@ class OrderManager:
             side=close_side,
             order_type=OrderType.MARKET,
             quantity=position.quantity,
+            price=fill_price,
             reduce_only=True,
             strategy_name=position.strategy_name,
             created_at=datetime.now(timezone.utc),

@@ -107,6 +107,7 @@ async def handle_pnl(request: web.Request) -> web.Response:
 async def handle_close_position(request: web.Request) -> web.Response:
     symbol = request.match_info["symbol"].upper()
     state = request.app["state"]
+    engine = request.app["engine"]
     order_manager = request.app["order_manager"]
 
     if symbol not in state.positions:
@@ -114,7 +115,17 @@ async def handle_close_position(request: web.Request) -> web.Response:
 
     position = state.positions[symbol]
     try:
-        order = await order_manager.close_position(position, reason="manual_close_via_ui")
+        # Get current market price for a realistic paper fill
+        current_price = None
+        try:
+            mids = await engine.market_data.get_all_mids()
+            current_price = mids.get(symbol)
+        except Exception:
+            pass
+
+        order = await order_manager.close_position(
+            position, reason="manual_close_via_ui", price=current_price
+        )
         if order:
             return web.json_response({"closed": True, "symbol": symbol})
         return web.json_response({"error": "Close order failed"}, status=500)

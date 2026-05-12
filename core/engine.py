@@ -209,7 +209,7 @@ class TradingEngine:
                 logger.warning("Stop loss triggered for %s at %.4f", symbol, current_price)
                 bus.emit(EventType.STOP_LOSS_TRIGGERED, source="engine",
                          payload={"symbol": symbol, "price": current_price})
-                await self.order_manager.close_position(position, reason="stop_loss")
+                await self.order_manager.close_position(position, reason="stop_loss", price=current_price)
                 return
 
         # Take profit
@@ -219,7 +219,7 @@ class TradingEngine:
                 logger.info("Take profit triggered for %s at %.4f", symbol, current_price)
                 bus.emit(EventType.TAKE_PROFIT_TRIGGERED, source="engine",
                          payload={"symbol": symbol, "price": current_price})
-                await self.order_manager.close_position(position, reason="take_profit")
+                await self.order_manager.close_position(position, reason="take_profit", price=current_price)
                 return
 
         # Strategy exit signal
@@ -228,7 +228,7 @@ class TradingEngine:
                 featured_df = strategy.prepare_features(df)
                 if featured_df is not None and strategy.should_exit(featured_df, position, self.state):
                     logger.info("Strategy exit signal for %s", symbol)
-                    await self.order_manager.close_position(position, reason="strategy_exit")
+                    await self.order_manager.close_position(position, reason="strategy_exit", price=current_price)
                     return
 
     # ------------------------------------------------------------------
